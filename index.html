@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luka’s 英文聯絡簿 - 森林集點樂園</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stone: {
+                            850: '#211f1d',
+                            550: '#736d66',
+                            450: '#a19a91',
+                        }
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 0.25s ease-out forwards',
+                        bounceGentle: 'bounceGentle 2s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        bounceGentle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-6px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 引入 Alpine.js 用於狀態管理 -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- 引入 Google Fonts 活潑圓體與手寫風格 -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+        }
+        /* 電子簽章板防捲動 */
+        canvas {
+            touch-action: none;
+        }
+        /* 列印專用 CSS */
+        @media print {
+            body {
+                background-color: white !important;
+                font-size: 11pt;
+                color: #1c1917 !important;
+            }
+            header, footer, .print-hidden, .custom-modal, .no-print {
+                display: none !important;
+            }
+            main {
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-[#FAF6F0] text-stone-850 pb-12 print:bg-white print:pb-0" 
+      x-data="contactBook()" 
+      x-init="initApp()">
+
+    <!-- ==================== 彈出視窗：核銷兌換 Modal ==================== -->
+    <div x-show="redeemModalOpen" 
+         class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn custom-modal"
+         style="display: none;">
+         <div class="bg-white p-6 rounded-3xl max-w-md w-full mx-4 shadow-xl border border-stone-200">
+            <div class="text-4xl text-center mb-2">🎁</div>
+            <h3 class="font-bold text-xl text-center text-emerald-800">核銷 20 點兌換獎品！</h3>
+            <p class="text-xs text-center text-stone-500 mt-1">請記錄 Luka 今天用 20 點森林能量兌換了什麼好棒的禮物吧！</p>
+            
+            <div class="mt-4 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-stone-700 mb-1">🎁 兌換獎項備註</label>
+                    <input type="text" 
+                           x-model="redeemForm.item" 
+                           placeholder="例如：麥當勞冰淇淋一球 / 恐龍貼紙本"
+                           class="w-full border-stone-200 border rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-emerald-500 text-stone-800" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-stone-700 mb-1">📸 上傳與獎品合照 (選填)</label>
+                    <input type="file" 
+                           accept="image/*"
+                           @change="handlePhotoUpload($event)"
+                           class="w-full text-xs text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+                    
+                    <!-- 預覽上傳的照片 -->
+                    <template x-if="redeemForm.photo">
+                        <div class="mt-2 relative inline-block">
+                            <img :src="redeemForm.photo" class="h-24 w-auto object-cover rounded-xl border border-stone-200 shadow-sm" />
+                            <button @click="redeemForm.photo = ''" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow">✕</button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex justify-center gap-3 mt-6">
+                <button @click="closeRedeemModal()" 
+                        class="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl text-xs font-bold transition">
+                    取消
+                </button>
+                <button @click="submitRedemption()" 
+                        class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-700/10">
+                    確認核銷兌換
+                </button>
+            </div>
+         </div>
+    </div>
+
+    <!-- ==================== 彈出視窗：刪除紀錄確認 Modal ==================== -->
+    <div x-show="showDeleteModalId !== null" 
+         class="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn custom-modal"
+         style="display: none;">
+         <div class="bg-white p-6 rounded-3xl max-w-sm w-full mx-4 shadow-xl border border-stone-200">
+            <div class="text-4xl text-center mb-2">🪵</div>
+            <h3 class="font-bold text-lg text-center text-stone-850">確定要刪除這筆紀錄嗎？</h3>
+            <p class="text-sm text-center text-stone-550 mt-2">此動作將無法復原，Luka 的上課紀錄與點數也會被扣除喔！</p>
+            <div class="flex justify-center gap-3 mt-6">
+                <button @click="showDeleteModalId = null" 
+                        class="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl text-sm font-bold transition">
+                    取消
+                </button>
+                <button @click="confirmDeleteRecord()" 
+                        class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-bold transition shadow-md shadow-orange-600/10">
+                    確認刪除
+                </button>
+            </div>
+         </div>
+    </div>
+
+    <!-- Toast 訊息通知 -->
+    <div x-show="toast" 
+         class="fixed top-4 right-4 z-50 px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 text-white transition-all duration-300 transform translate-y-0"
+         :class="toast?.type === 'error' ? 'bg-orange-600' : 'bg-emerald-600'"
+         style="display: none;"
+         x-transition>
+        <span class="text-lg" x-text="toast?.type === 'error' ? '🪵' : '🍀'"></span>
+        <span class="font-bold text-sm" x-text="toast?.message"></span>
+    </div>
+
+    <!-- 頂部大自然風格導覽列 -->
+    <header class="bg-gradient-to-r from-emerald-800 via-emerald-700 to-amber-600 text-white shadow-md sticky top-0 z-30 print:hidden">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-100 text-emerald-850 p-2.5 rounded-2xl shadow-inner font-bold text-2xl animate-bounceGentle">
+                    ❤️
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wide flex items-center gap-1.5">
+                        Luka’s 英文聯絡簿
+                    </h1>
+                </div>
+            </div>
+            
+            <nav class="flex bg-[#FDFBF7]/15 p-1 rounded-2xl backdrop-blur-sm">
+                <button @click="changeTab('dashboard')"
+                        class="px-4 py-2 rounded-xl text-sm font-bold transition"
+                        :class="activeTab === 'dashboard' ? 'bg-[#FAF6F0] text-emerald-800 shadow-md' : 'hover:bg-white/10'">
+                    🏡 首頁小天地
+                </button>
+                <button @click="changeTab('history')"
+                        class="px-4 py-2 rounded-xl text-sm font-bold transition"
+                        :class="activeTab === 'history' ? 'bg-[#FAF6F0] text-emerald-800 shadow-md' : 'hover:bg-white/10'">
+                    📖 歷程與簽名
+                </button>
+                <button @click="changeTab('add-record')"
+                        class="px-4 py-2 rounded-xl text-sm font-bold transition"
+                        :class="activeTab === 'add-record' ? 'bg-[#FAF6F0] text-emerald-800 shadow-md' : 'hover:bg-white/10'">
+                    ✍️ 新增今日進度
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 主體內容區塊 -->
+    <main class="max-w-6xl mx-auto px-4 py-8 print:py-0 print:px-0">
+        
+        <!-- ==================== 1. 首頁小天地 ==================== -->
+        <div x-show="activeTab === 'dashboard'" class="space-y-8 animate-fadeIn print:hidden">
+            
+            <!-- 數據看板 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-stone-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-stone-400 font-bold">上課堂數</p>
+                        <h3 class="text-2xl font-black text-stone-800 mt-1" x-text="records.length + ' 堂課'">0 堂課</h3>
+                    </div>
+                    <div class="text-3xl bg-amber-50 p-3.5 rounded-2xl">🌱</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-stone-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-stone-400 font-bold">課堂專注度</p>
+                        <h3 class="text-2xl font-black text-emerald-700 mt-1" x-text="stats.avgFocus + ' / 5.0'">0.0</h3>
+                    </div>
+                    <div class="text-3xl bg-emerald-50 p-3.5 rounded-2xl">🐝</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-stone-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-stone-400 font-bold">吸收理解力</p>
+                        <h3 class="text-2xl font-black text-orange-700 mt-1" x-text="stats.avgUnderstanding + ' / 5.0'">0.0</h3>
+                    </div>
+                    <div class="text-3xl bg-orange-50 p-3.5 rounded-2xl">🦁</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-stone-100 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-stone-400 font-bold">小挑戰關卡均分</p>
+                        <h3 class="text-2xl font-black text-amber-700 mt-1" x-text="stats.avgExamScore === 'N/A' ? '未安排' : stats.avgExamScore + ' 分'">N/A</h3>
+                    </div>
+                    <div class="text-3xl bg-amber-50 p-3.5 rounded-2xl">⭐</div>
+                </div>
+            </div>
+
+            <!-- 🍀 Luka 的集點樂園！ -->
+            <div class="bg-white p-8 rounded-3xl border border-amber-100 shadow-md space-y-6 relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 opacity-5 text-9xl pointer-events-none select-none">🌳</div>
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-stone-100">
+                    <div>
+                        <h2 class="text-xl font-black text-emerald-800 flex items-center gap-2">
+                            <span>🐻</span> Luka的集點樂園！
+                        </h2>
+                        <p class="text-xs text-stone-500 mt-1">每次上課表現優異得星星或選貼紙，都可累積森林點數！滿 20 點即可核銷兌換獎品喔！</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl border border-amber-200 shadow-sm">
+                        <span class="text-xs font-bold text-amber-805">目前等級：</span>
+                        <span class="text-sm font-black text-amber-950 bg-amber-200 px-2.5 py-0.5 rounded-lg" x-text="getPointsData().levelName"></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                    <!-- 左欄：點數進度與兌換核銷按鈕 -->
+                    <div class="md:col-span-5 space-y-4 bg-[#FAF6F0]/40 p-5 rounded-3xl border border-stone-100">
+                        <div class="flex justify-between items-baseline">
+                            <div>
+                                <span class="text-xs text-stone-400 font-bold">可用森林能量點數</span>
+                                <div class="flex items-baseline gap-1 mt-1">
+                                    <span class="text-4xl font-black text-emerald-700" x-text="getPointsData().availablePoints">0</span>
+                                    <span class="text-xs text-stone-500 font-bold">點 (pts)</span>
+                                </div>
+                                <p class="text-[10px] text-stone-450 font-bold mt-1" x-text="'歷史累計總點數: ' + getPointsData().totalEarned + ' 點'"></p>
+                            </div>
+                            
+                            <!-- 獎項核銷控制鈕 -->
+                            <div class="text-right">
+                                <template x-if="getPointsData().availablePoints >= 20">
+                                    <button @click="openRedeemModal()"
+                                            class="bg-amber-500 hover:bg-amber-400 text-amber-950 font-black text-xs px-4 py-3 rounded-2xl transition shadow-lg shadow-amber-500/20 flex flex-col items-center gap-0.5 animate-bounceGentle">
+                                        <span>🎁 滿 20 點！</span>
+                                        <span>立即核銷兌換 ➜</span>
+                                    </button>
+                                </template>
+                                <template x-if="getPointsData().availablePoints < 20">
+                                    <button disabled 
+                                            class="bg-stone-100 text-stone-400 font-bold text-xs px-4 py-3 rounded-2xl cursor-not-allowed flex flex-col items-center">
+                                        <span>🎁 還差 <span x-text="20 - getPointsData().availablePoints"></span> 點</span>
+                                        <span>即可兌換獎勵</span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- 森林風進度條 -->
+                        <div class="space-y-1.5 pt-2">
+                            <div class="w-full bg-stone-100 h-4 rounded-full overflow-hidden border border-stone-200/50 p-0.5 flex items-center">
+                                <div class="bg-gradient-to-r from-emerald-600 to-amber-500 h-full rounded-full transition-all duration-1000 ease-out"
+                                     :style="'width: ' + getPointsData().percent + '%'"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-stone-400 font-bold">
+                                <span>下一階稱號: <span x-text="getPointsData().nextMilestone + '點'"></span></span>
+                                <span x-text="Math.round(getPointsData().percent) + '%'">0%</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-3 rounded-2xl border border-stone-200/40 text-xs text-stone-600 space-y-1.5">
+                            <p class="leading-relaxed text-[11px]">
+                                🍀 <strong>集點秘笈：</strong> 得到精美徽章可獲 <strong class="text-emerald-700">10 點</strong>，每項表現星星評分也是 <strong class="text-emerald-700">1 點</strong>！
+                            </p>
+                            <p class="leading-relaxed text-[11px] text-orange-650">
+                                🪵 <strong>注意：</strong>若當日表現不好，老師可選擇「空白徽章」，該次將不累積徽章的 10 點點數喔！
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 右欄：榮譽貼紙收集牆 (不含空白徽章) -->
+                    <div class="md:col-span-7 bg-[#FAF6F0]/60 p-5 rounded-3xl border border-stone-200/50 space-y-3">
+                        <p class="text-xs font-black text-stone-700">🏆 Luka 的森林榮譽徽章收集冊 (貼紙挑戰亮起)</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+                            <!-- 過濾掉 none 空白徽章 -->
+                            <template x-for="st in rewardStickers.filter(s => s.id !== 'none')" :key="st.id">
+                                <div class="p-3 rounded-2xl border bg-white flex flex-col items-center justify-center gap-1.5 transition duration-300 relative overflow-hidden"
+                                     :class="getStickerCounts()[st.id] > 0 ? `${st.border} ${st.bg} scale-105 shadow-sm` : 'opacity-40 border-stone-200 bg-stone-50'">
+                                    
+                                    <!-- 鎖頭狀態 -->
+                                    <div x-show="getStickerCounts()[st.id] === 0" class="absolute top-1 right-1 text-[10px] text-stone-400">
+                                        🔒
+                                    </div>
+
+                                    <span class="text-3xl filter transition" :class="getStickerCounts()[st.id] > 0 ? '' : 'grayscale opacity-70'" x-text="st.emoji"></span>
+                                    <span class="text-[10px] font-bold text-center leading-tight text-stone-750" x-text="st.label.split(' ')[1]"></span>
+                                    
+                                    <!-- 獲得數量標籤 -->
+                                    <div class="mt-1">
+                                        <span class="text-[10px] px-2 py-0.5 rounded-full font-extrabold"
+                                              :class="getStickerCounts()[st.id] > 0 ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-400'"
+                                              x-text="'x' + getStickerCounts()[st.id]">x0</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== 🏆 Luka 的榮譽兌換牆 (Redemption History) ==================== -->
+                <div class="border-t border-stone-100 pt-6 mt-6">
+                    <h3 class="text-sm font-black text-emerald-800 mb-3 flex items-center gap-1.5">
+                        <span>🏆</span> Luka 的榮譽兌換牆與微調紀錄
+                    </h3>
+                    
+                    <template x-if="redeemedList.length === 0 && deductionsList.length === 0">
+                        <p class="text-xs text-stone-400 italic py-2">目前尚無任何禮物兌換與扣點紀錄，一分耕耘一分收穫，繼續加油唷！</p>
+                    </template>
+
+                    <!-- 兌換與扣點紀錄清單 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        <!-- 兌換歷史 -->
+                        <template x-for="item in redeemedList" :key="item.id">
+                            <div class="bg-[#FAF6F0]/60 p-4 rounded-2xl border border-emerald-100/60 flex flex-col justify-between space-y-3 relative overflow-hidden">
+                                <div class="flex justify-between items-start">
+                                    <span class="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-lg" x-text="item.date"></span>
+                                    <button @click="deleteRedemption(item.id)" 
+                                            class="text-[10px] text-rose-600 hover:underline font-bold"
+                                            title="刪除此紀錄並退回 20 點">
+                                        ✕ 刪除 (退點)
+                                    </button>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <template x-if="item.photo">
+                                        <img :src="item.photo" class="w-12 h-12 object-cover rounded-lg border border-stone-100 shadow-sm flex-shrink-0" />
+                                    </template>
+                                    <template x-if="!item.photo">
+                                        <div class="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-xl flex-shrink-0">🎁</div>
+                                    </template>
+                                    <div>
+                                        <p class="text-xs font-black text-stone-800">兌換了 20 點獎品！</p>
+                                        <p class="text-[11px] text-emerald-700 font-bold mt-0.5" x-text="'🎁 ' + item.item"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- 手動扣點歷史 -->
+                        <template x-for="ded in deductionsList" :key="ded.id">
+                            <div class="bg-rose-50/40 p-4 rounded-2xl border border-rose-100/60 flex flex-col justify-between space-y-3">
+                                <div class="flex justify-between items-start">
+                                    <span class="bg-rose-100 text-rose-800 text-[9px] font-bold px-2 py-0.5 rounded-lg" x-text="ded.date"></span>
+                                    <button @click="deleteDeduction(ded.id)" 
+                                            class="text-[10px] text-stone-500 hover:text-stone-800 hover:underline font-bold"
+                                            title="刪除此紀錄並退回點數">
+                                        ✕ 刪除 (退點)
+                                    </button>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-xl flex-shrink-0">🪵</div>
+                                    <div>
+                                        <p class="text-xs font-black text-stone-800" x-text="'手動扣除點數: ' + ded.points + ' 點'"></p>
+                                        <p class="text-[11px] text-rose-700 mt-0.5 font-bold" x-text="'備註: ' + ded.reason"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- 手動點數微調扣點工具 (用於手動刪除點數/扣除點數) -->
+                    <div class="mt-4 p-4 bg-stone-50 rounded-2xl border border-stone-200/50 max-w-md">
+                        <p class="text-xs font-bold text-stone-700 mb-2">⚙️ 親師點數微調管理 (可由此扣減/刪除點數)</p>
+                        <div class="flex gap-2">
+                            <input type="number" 
+                                   x-model="manualDeduct.points" 
+                                   placeholder="點數" 
+                                   min="1"
+                                   class="w-20 border-stone-200 border rounded-xl px-2 py-1 text-xs text-stone-800" />
+                            <input type="text" 
+                                   x-model="manualDeduct.reason" 
+                                   placeholder="扣點備註 (如：未完成回家作業)" 
+                                   class="flex-1 border-stone-200 border rounded-xl px-3 py-1 text-xs text-stone-800" />
+                            <button @click="submitManualDeduction()" 
+                                    class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 py-1 rounded-xl transition">
+                                執行扣除
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- 森林風導引卡片 -->
+            <div class="bg-gradient-to-br from-emerald-800 to-amber-700 text-white rounded-3xl p-8 shadow-md relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 opacity-10 text-9xl select-none">🎈</div>
+                <div class="relative z-10 max-w-2xl">
+                    <h2 class="text-2xl font-black">一起來複習吧！</h2>
+                    <p class="text-emerald-100 mt-2 leading-relaxed text-sm">
+                        歡迎來到英文智慧聯絡簿。在這裡除了能確認每一堂課的學習發音，更能使用「手寫電子簽章」和「集點樂園貼紙」功能，帶給一年級的孩子滿滿的學習動力！
+                    </p>
+                    <div class="mt-6 flex flex-wrap gap-4">
+                        <button @click="changeTab('history')"
+                                class="bg-white/15 hover:bg-white/20 text-white font-bold px-6 py-3 rounded-2xl transition border border-white/10 text-sm">
+                            📖 陪家長一起看進度
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最近上課精彩紀錄 -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-black text-stone-700 flex items-center gap-2">
+                    <span>🍀</span> 最近上課成果紀錄
+                </h3>
+                
+                <template x-if="records.length === 0">
+                    <div class="bg-white p-12 rounded-3xl text-center text-stone-400 shadow-sm border border-stone-100">
+                        目前還沒有任何課程紀錄，點擊「新增今日進度」與小寶貝開啟第一頁吧！
+                    </div>
+                </template>
+
+                <template x-if="records.length > 0">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <template x-for="rec in records.slice(0, 4)" :key="rec.id">
+                            <div class="bg-white p-6 rounded-3xl shadow-sm border border-stone-100 hover:shadow-md hover:border-stone-200 transition flex flex-col justify-between relative overflow-hidden">
+                                <!-- 榮譽貼紙 -->
+                                <div class="absolute top-4 right-4 text-3xl opacity-90 rotate-12" 
+                                     :title="getStickerInfo(rec.sticker)?.label"
+                                     x-text="getStickerEmoji(rec.sticker)">
+                                </div>
+                                
+                                <div>
+                                    <div class="flex justify-between items-start">
+                                        <span class="bg-amber-100 text-amber-900 text-[11px] px-3 py-1 rounded-xl font-bold" x-text="rec.date"></span>
+                                        <span class="text-[11px] px-3 py-1 rounded-full font-bold mr-10"
+                                              :class="rec.parentSignature ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'"
+                                              x-text="rec.parentSignature ? '✓ 已簽名' : '✕ 等待簽名'">
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-black text-stone-850 mt-4 pr-10 line-clamp-1" x-text="rec.topic"></h4>
+                                    
+                                    <div class="mt-4 space-y-2 text-sm text-stone-500">
+                                        <p class="line-clamp-1"><strong class="text-stone-700">單字核心:</strong> <span x-text="rec.vocabulary || '無'"></span></p>
+                                        <p class="line-clamp-1"><strong class="text-stone-700">下週指派:</strong> <span x-text="rec.homework || '無'"></span></p>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 pt-4 border-t border-stone-100 flex justify-between items-center">
+                                    <div class="flex gap-2">
+                                        <span x-show="rec.hasExam" class="bg-amber-50 text-amber-800 text-[11px] px-2.5 py-0.5 rounded-lg font-bold border border-amber-200/50">
+                                            💯 小挑戰: <span x-text="rec.examScore + '分'"></span>
+                                        </span>
+                                        <span x-show="rec.links && rec.links.length > 0" class="bg-emerald-50 text-emerald-800 text-[11px] px-2.5 py-0.5 rounded-lg font-bold border border-emerald-200/50">
+                                            🔗 附影音教材
+                                        </span>
+                                    </div>
+                                    <button @click="viewDetailInHistory(rec.id)"
+                                            class="text-emerald-700 hover:text-emerald-800 text-sm font-black flex items-center gap-1 transition">
+                                        詳細與簽名 ➜
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+        </div>
+
+        <!-- ==================== 2. 新增聯絡簿紀錄 ==================== -->
+        <div x-show="activeTab === 'add-record'" class="bg-white rounded-3xl shadow-sm border border-stone-100 p-8 max-w-4xl mx-auto animate-fadeIn print:hidden" style="display: none;">
+            <div class="border-b border-stone-100 pb-5 mb-6">
+                <h2 class="text-2xl font-black text-stone-800 flex items-center gap-2">
+                    <span>📝</span> 填寫新一堂英文課成果
+                </h2>
+                <p class="text-sm text-stone-400 mt-1">請記錄今天一年級 Luka 的字彙發音、隨堂歌謠和口說互動表現，讓家長輕鬆協助複習。</p>
+            </div>
+
+            <form @submit.prevent="handleAddRecord" class="space-y-8">
+                
+                <!-- 基本資訊組 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">📅 上課日期</label>
+                        <input type="date" 
+                               x-model="formData.date"
+                               class="w-full border-stone-200 border rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800"
+                               required />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">⏱ 開始時間</label>
+                        <input type="time" 
+                               x-model="formData.startTime"
+                               class="w-full border-stone-200 border rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800"
+                               required />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">⏱ 結束時間</label>
+                        <input type="time" 
+                               x-model="formData.endTime"
+                               class="w-full border-stone-200 border rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800"
+                               required />
+                    </div>
+                </div>
+
+                <!-- 今日上課主題 -->
+                <div>
+                    <label class="block text-sm font-bold text-stone-700 mb-2">📚 今日上課大主題 (Topic)</label>
+                    <input type="text" 
+                           placeholder="例如: Unit 3: Fruit Party! (蘋果、香蕉與基礎 Phonics 發音)"
+                           x-model="formData.topic"
+                           class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800"
+                           required />
+                </div>
+
+                <!-- 榮譽貼紙選擇器 (含空白徽章) -->
+                <div class="bg-[#FAF6F0] p-6 rounded-3xl border border-amber-200/50 space-y-4">
+                    <label class="block text-sm font-black text-stone-800">🎖 挑選今日獎勵勳章 (若表現待加強，可挑選空白徽章唷！)</label>
+                    <p class="text-xs text-stone-500">
+                        挑選一枚最適合 Luka 今天表現的超讚貼紙 (將增加 10 點森林能量點數)；若挑選 **空白徽章**，則代表當日不集貼紙點數。
+                    </p>
+                    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3 pt-1">
+                        <template x-for="st in rewardStickers" :key="st.id">
+                            <button type="button"
+                                    @click="formData.sticker = st.id"
+                                    class="p-3 rounded-2xl border text-center transition flex flex-col items-center gap-1.5"
+                                    :class="formData.sticker === st.id ? `${st.bg} ${st.text} ${st.border} border-2 scale-105 shadow-md` : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'">
+                                <span class="text-3xl animate-bounceGentle" x-text="st.emoji"></span>
+                                <span class="text-[11px] font-black leading-tight" x-text="st.label.split(' ')[1] || st.label"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 課堂詳細細節 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">🍎 認識單字與字母發音 (Vocabulary & Phonics)</label>
+                        <textarea rows="3"
+                                  placeholder="請列出今天認識的單字與音標，如: apple (蘋果), banana (香蕉)..."
+                                  x-model="formData.vocabulary"
+                                  class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800 text-sm"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-stone-700 mb-2">⭐ 核心句子與互動句型 (Sentence Pattern)</label>
+                        <textarea rows="3"
+                                  placeholder="例如：基礎疑問與回答句子：What color is it? / It is yellow."
+                                  x-model="formData.grammar"
+                                  class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800 text-sm"></textarea>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-stone-700 mb-2">🎶 唱跳說話與口說遊戲互動 (Speaking & Fun Activities)</label>
+                    <input type="text"
+                           placeholder="例如：繽紛水果盤尋寶遊戲、英文童謠哼唱跳《The ABC Song》"
+                           x-model="formData.speaking"
+                           class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-stone-800" />
+                </div>
+
+                <!-- 課堂量化表現評價 -->
+                <div class="bg-[#FAF6F0] p-6 rounded-3xl border border-stone-200/50 space-y-5">
+                    <h3 class="font-black text-stone-800 text-sm border-b border-stone-200 pb-2 flex items-center gap-1.5">
+                        <span>💡</span> 今日學習表現評估 (每顆星星都會轉換為 1 點可用森林點數！)
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- 專注力 -->
+                        <div>
+                          <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-stone-600">課堂專注與唱歌參與</label>
+                            <span class="text-xs bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-lg" x-text="formData.focusScore + ' ★'"></span>
+                          </div>
+                          <input type="range" min="1" max="5" 
+                                 x-model="formData.focusScore"
+                                 class="w-full accent-emerald-600 cursor-pointer" />
+                          <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+                            <span>要多加油</span>
+                            <span>超級投入</span>
+                          </div>
+                        </div>
+
+                        <!-- 理解力 -->
+                        <div>
+                          <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-stone-600">互動遊戲與字彙認讀</label>
+                            <span class="text-xs bg-orange-100 text-orange-800 font-extrabold px-2 py-0.5 rounded-lg" x-text="formData.understandingScore + ' ★'"></span>
+                          </div>
+                          <input type="range" min="1" max="5" 
+                                 x-model="formData.understandingScore"
+                                 class="w-full accent-orange-600 cursor-pointer" />
+                          <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+                            <span>再練一下</span>
+                            <span>過關斬將</span>
+                          </div>
+                        </div>
+
+                        <!-- 作業狀況 -->
+                        <div>
+                          <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-stone-600">作業完成度與發音練習</label>
+                            <span class="text-xs bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-lg" x-text="formData.hwScore + ' ★'"></span>
+                          </div>
+                          <input type="range" min="1" max="5" 
+                                 x-model="formData.hwScore"
+                                 class="w-full accent-amber-600 cursor-pointer" />
+                          <div class="flex justify-between text-[10px] text-stone-400 mt-1">
+                            <span>未交/待補</span>
+                            <span>完成得超棒</span>
+                          </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 今日小挑戰/小考 -->
+                <div class="border border-stone-200 rounded-3xl p-6 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" 
+                               id="hasExam" 
+                               x-model="formData.hasExam"
+                               class="w-5 h-5 text-emerald-600 border-stone-300 rounded focus:ring-emerald-500" />
+                        <label for="hasExam" class="text-sm font-bold text-stone-700 cursor-pointer select-none">今天有進行英文讀音或認字配對小挑戰 (Mini Quiz)</label>
+                    </div>
+
+                    <div x-show="formData.hasExam" class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-fadeIn" style="display: none;">
+                        <div>
+                            <label class="block text-xs font-bold text-stone-600 mb-1">小挑戰項目</label>
+                            <input type="text" 
+                                   placeholder="例如: 字母 A-D 與水果認字配對"
+                                   x-model="formData.examTopic"
+                                   class="w-full border-stone-200 border rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 text-stone-800" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-stone-600 mb-1">寶貝挑戰成績分數</label>
+                            <input type="number" 
+                                   min="0" max="100"
+                                   placeholder="請輸入分數 0 - 100"
+                                   x-model="formData.examScore"
+                                   class="w-full border-stone-200 border rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 text-stone-800" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 回家指派作業 -->
+                <div>
+                    <label class="block text-sm font-bold text-stone-700 mb-2">✏️ 回家小任務與親子練習 (Homework & Mission)</label>
+                    <textarea rows="4"
+                              placeholder="例如：&#10;1. 與家長一起唱英文兒歌：Fruit Song 一次。&#10;2. 描寫字母單字學習單第 8 頁。"
+                              x-model="formData.homework"
+                              class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 text-stone-800"></textarea>
+                </div>
+
+                <!-- 教材與影音傳送門 -->
+                <div class="border border-stone-200 rounded-3xl p-6 bg-stone-50/50 space-y-4">
+                    <h3 class="font-bold text-stone-800 text-sm flex items-center gap-2">
+                        <span>📺</span> 影音複習與電腦教材連結
+                    </h3>
+                    
+                    <!-- 連結列表呈現 -->
+                    <div x-show="formData.links.length > 0" class="space-y-2 py-2" style="display: none;">
+                        <template x-for="lnk in formData.links" :key="lnk.id">
+                            <div class="flex justify-between items-center bg-white p-3 rounded-2xl border border-stone-100 shadow-sm animate-fadeIn">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="text-xl" x-text="lnk.type === 'youtube' ? '📺' : lnk.type === 'doc' ? '📂' : '🌐'"></span>
+                                    <div>
+                                        <p class="text-sm font-bold text-stone-800" x-text="lnk.title"></p>
+                                        <a :href="lnk.url" target="_blank" rel="noreferrer" class="text-xs text-emerald-600 hover:underline line-clamp-1" x-text="lnk.url"></a>
+                                    </div>
+                                </div>
+                                <button type="button"
+                                        @click="removeTempLink(lnk.id)"
+                                        class="text-orange-600 hover:text-orange-700 text-xs font-bold px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded-xl transition">
+                                    ✕ 移除
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- 新增連結輸入區 -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+                        <div class="md:col-span-1">
+                            <select x-model="tempLinkLabel"
+                                    class="w-full border-stone-200 border rounded-2xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 text-stone-800">
+                                <option value="youtube">📺 YouTube 兒童韻律歌謠</option>
+                                <option value="doc">📂 雲端講義/電腦練習單</option>
+                                <option value="link">🌐 其他課後複習網址</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-1">
+                            <input type="text" 
+                                   placeholder="複習名稱 (如: 字母歌)"
+                                   x-model="tempLinkTitle"
+                                   class="w-full border-stone-200 border rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 text-stone-800" />
+                        </div>
+                        <div class="md:col-span-2 flex gap-2">
+                            <input type="text" 
+                                   placeholder="貼上完整網址 (https://...)"
+                                   x-model="tempLinkUrl"
+                                   class="w-full border-stone-200 border text-sm rounded-2xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 text-stone-800 flex-1" />
+                            <button type="button"
+                                    @click="addTempLink()"
+                                    class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm px-5 py-2 rounded-2xl transition shadow">
+                                新增連結
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 儲存送出按鈕 -->
+                <div class="flex justify-end gap-4 border-t border-stone-100 pt-6">
+                    <button type="button" 
+                            @click="changeTab('dashboard')"
+                            class="bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold px-6 py-3 rounded-2xl transition">
+                        取消
+                    </button>
+                    <button type="submit"
+                            class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-8 py-3 rounded-2xl transition shadow-lg shadow-emerald-700/10">
+                        發佈並通知家長
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- ==================== 3. 歷程紀錄與家長留言/簽名 ==================== -->
+        <div x-show="activeTab === 'history'" class="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fadeIn" style="display: none;">
+            
+            <!-- 左側：歷次紀錄選擇清單 -->
+            <div class="lg:col-span-4 space-y-4 print-hidden">
+                <h3 class="text-lg font-black text-stone-700 flex items-center gap-2">
+                    <span>📖 歷程與簽名</span>
+                </h3>
+                
+                <template x-if="records.length === 0">
+                    <div class="bg-white p-6 rounded-3xl text-center text-stone-400">
+                        尚無任何課程紀錄
+                    </div>
+                </template>
+
+                <div class="space-y-3 overflow-y-auto max-h-[600px] pr-2">
+                    <template x-for="rec in records" :key="rec.id">
+                        <button @click="selectRecord(rec.id)"
+                                class="w-full text-left p-4 rounded-3xl border transition flex flex-col justify-between relative overflow-hidden"
+                                :class="selectedRecordId === rec.id ? 'bg-emerald-700 text-white border-emerald-700 shadow-lg' : 'bg-white text-stone-800 border-stone-100 hover:bg-[#FAF6F0] shadow-sm'">
+                            <!-- 小徽章縮圖 -->
+                            <div class="absolute bottom-2 right-2 text-2xl opacity-60" x-text="getStickerEmoji(rec.sticker)"></div>
+                            
+                            <div class="flex justify-between items-center w-full mb-2">
+                                <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg"
+                                      :class="selectedRecordId === rec.id ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-500'"
+                                      x-text="rec.date"></span>
+                                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                                      :class="rec.parentSignature ? (selectedRecordId === rec.id ? 'bg-amber-400 text-emerald-950' : 'bg-emerald-50 text-emerald-700 border border-emerald-200/55') : (selectedRecordId === rec.id ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 border border-orange-200/55')"
+                                      x-text="rec.parentSignature ? '✓ 已簽名' : '✕ 待簽名'"></span>
+                            </div>
+                            <h4 class="font-black text-sm pr-6 line-clamp-1" x-text="rec.topic"></h4>
+                            <p class="text-[11px] mt-1 line-clamp-1"
+                               :class="selectedRecordId === rec.id ? 'text-emerald-100' : 'text-stone-400'"
+                               x-text="'小任務: ' + (rec.homework || '無')"></p>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- 右側：詳細聯絡簿卡片 + 家長互動區 -->
+            <div class="lg:col-span-8 space-y-6">
+                <div x-show="selectedRecordId === null" 
+                     class="bg-white rounded-3xl p-12 text-center text-stone-400 border border-stone-100 shadow-sm flex flex-col items-center justify-center min-h-[350px] print-hidden">
+                    <span class="text-5xl mb-4">🐨</span>
+                    <p class="font-black text-lg text-stone-700">請在左邊點選一堂上課日期</p>
+                    <p class="text-sm mt-1 text-stone-400">即可與家長一起過目、回覆意見留言，並使用電子簽名章喔！</p>
+                </div>
+
+                <div x-show="selectedRecordId !== null" class="space-y-6">
+                    <!-- 聯絡簿內容主卡片 -->
+                    <div class="bg-white rounded-3xl shadow-sm border border-stone-100 p-8 print:p-0 print:border-none print:shadow-none print:rounded-none relative overflow-hidden">
+                        
+                        <!-- 僅列印時顯示的標頭 -->
+                        <div class="hidden print:block border-b-2 border-emerald-700 pb-5 mb-6">
+                          <div class="flex justify-between items-end">
+                            <div>
+                              <h1 class="text-3xl font-black text-emerald-800 tracking-wide">Luka’s 英文聯絡簿</h1>
+                              <p class="text-sm text-emerald-600 font-bold mt-1">英文智慧聯絡簿 • 親師課堂報告單</p>
+                            </div>
+                            <div class="text-right text-xs text-stone-400" x-text="'列印時間: ' + new Date().toLocaleDateString()"></div>
+                          </div>
+                        </div>
+
+                        <!-- 頂部操控鈕 (列印時隱藏) -->
+                        <div class="flex flex-wrap justify-between items-center gap-4 border-b border-stone-100 pb-5 mb-6 print-hidden">
+                            <div>
+                                <span class="bg-emerald-50 text-emerald-800 text-xs px-3 py-1 rounded-xl font-black">今日課堂成果報告</span>
+                            </div>
+                            <div class="flex gap-2.5">
+                                <button @click="triggerPrint()"
+                                        class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-emerald-700/10 flex items-center gap-1.5">
+                                    📥 匯出精美聯絡簿 (另存 PDF)
+                                </button>
+                                <button @click="triggerDeleteRecord(selectedRecordId)"
+                                        class="bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs px-4 py-2.5 rounded-xl transition">
+                                    🗑 刪除此紀錄
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 大標題 -->
+                        <div class="space-y-2">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-2xl font-black text-emerald-800" x-text="selectedRecord()?.date"></span>
+                            <span class="text-xs font-bold text-stone-500 bg-stone-100 px-3 py-1 rounded-full" 
+                                  x-text="'⏱ ' + selectedRecord()?.startTime + ' ~ ' + selectedRecord()?.endTime"></span>
+                          </div>
+                          <h2 class="text-xl font-black text-stone-800 pt-1">
+                            單元主題: <span class="text-emerald-700" x-text="selectedRecord()?.topic"></span>
+                          </h2>
+                        </div>
+
+                        <!-- 詳細內容欄 -->
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-8 mt-8 border-t border-stone-100 pt-6">
+                            <!-- 左欄: 知識細節 -->
+                            <div class="md:col-span-8 space-y-6 border-r border-stone-100/80 pr-4 print:border-none print:pr-0 print:col-span-12">
+                                <div x-show="selectedRecord()?.vocabulary" class="space-y-2">
+                                    <h4 class="text-sm font-black text-stone-700 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">🍎 認識單字與字母發音 (Phonics & Vocab)</h4>
+                                    <p class="text-sm text-stone-600 bg-[#FAF6F0]/40 p-3 rounded-2xl border border-stone-100/60 font-medium leading-relaxed" x-text="selectedRecord()?.vocabulary"></p>
+                                </div>
+
+                                <div x-show="selectedRecord()?.grammar" class="space-y-2">
+                                    <h4 class="text-sm font-black text-stone-700 flex items-center gap-1.5 border-l-4 border-amber-600 pl-2">💬 核心句子與互動句型 (Sentences)</h4>
+                                    <p class="text-sm text-stone-600 bg-[#FAF6F0]/40 p-3 rounded-2xl border border-stone-100/60 font-medium leading-relaxed" x-text="selectedRecord()?.grammar"></p>
+                                </div>
+
+                                <div x-show="selectedRecord()?.speaking" class="space-y-2">
+                                    <h4 class="text-sm font-black text-stone-700 flex items-center gap-1.5 border-l-4 border-orange-600 pl-2">🦁 說話、唱跳與口說遊戲 (Activities)</h4>
+                                    <p class="text-sm text-stone-600 bg-[#FAF6F0]/40 p-3 rounded-2xl border border-stone-100/60 font-medium leading-relaxed" x-text="selectedRecord()?.speaking"></p>
+                                </div>
+
+                                <div x-show="selectedRecord()?.homework" class="space-y-2">
+                                    <h4 class="text-sm font-black text-stone-700 flex items-center gap-1.5 border-l-4 border-emerald-800 pl-2">✏️ 回家小任務與親子練習 (Homework)</h4>
+                                    <div class="text-sm text-emerald-950 bg-emerald-50/20 p-4 rounded-2xl border border-emerald-200/50 font-medium leading-relaxed whitespace-pre-wrap" x-text="selectedRecord()?.homework"></div>
+                                </div>
+                            </div>
+
+                            <!-- 右欄: 進度與評價 -->
+                            <div class="md:col-span-4 space-y-6 print:col-span-12">
+                                <div class="bg-[#FAF6F0]/50 p-5 rounded-3xl border border-stone-150 space-y-4">
+                                    <h4 class="text-xs font-bold text-stone-500 uppercase tracking-wider">🌻 學習表現成果小評等</h4>
+                                    
+                                    <div class="space-y-3">
+                                        <div>
+                                            <div class="flex justify-between text-xs font-bold text-stone-700 mb-1">
+                                                <span>專注與唱歌參與度</span>
+                                                <span class="text-emerald-700" x-text="'★'.repeat(selectedRecord()?.focusScore || 0) + '☆'.repeat(5 - (selectedRecord()?.focusScore || 0))"></span>
+                                            </div>
+                                            <div class="w-full bg-stone-100 h-1.5 rounded-full overflow-hidden">
+                                                <div class="bg-emerald-650 h-full rounded-full" :style="'width: ' + ((selectedRecord()?.focusScore || 0) * 20) + '%'"></div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div class="flex justify-between text-xs font-bold text-stone-700 mb-1">
+                                                <span>遊戲與字彙認讀</span>
+                                                <span class="text-orange-700" x-text="'★'.repeat(selectedRecord()?.understandingScore || 0) + '☆'.repeat(5 - (selectedRecord()?.understandingScore || 0))"></span>
+                                            </div>
+                                            <div class="w-full bg-stone-100 h-1.5 rounded-full overflow-hidden">
+                                                <div class="bg-orange-600 h-full rounded-full" :style="'width: ' + ((selectedRecord()?.understandingScore || 0) * 20) + '%'"></div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div class="flex justify-between text-xs font-bold text-stone-700 mb-1">
+                                                <span>作業發音完成度</span>
+                                                <span class="text-amber-700" x-text="'★'.repeat(selectedRecord()?.hwScore || 0) + '☆'.repeat(5 - (selectedRecord()?.hwScore || 0))"></span>
+                                            </div>
+                                            <div class="w-full bg-stone-100 h-1.5 rounded-full overflow-hidden">
+                                                <div class="bg-amber-600 h-full rounded-full" :style="'width: ' + ((selectedRecord()?.hwScore || 0) * 20) + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 小挑戰小考成果 -->
+                                <div x-show="selectedRecord()?.hasExam" class="bg-amber-50/50 border border-amber-200 p-5 rounded-3xl space-y-2" style="display: none;">
+                                    <p class="text-xs font-bold text-amber-800">🎯 今日小挑戰成果 (Quiz)</p>
+                                    <p class="text-xs text-stone-500 font-bold line-clamp-1" x-text="'內容: ' + selectedRecord()?.examTopic"></p>
+                                    <div class="flex items-baseline gap-1 pt-1">
+                                        <span class="text-3xl font-black text-amber-600" x-text="selectedRecord()?.examScore"></span>
+                                        <span class="text-xs text-stone-400 font-bold">分 / 100分</span>
+                                    </div>
+                                </div>
+
+                                <!-- Today's Badge 榮譽徽章 (移至此空白處) -->
+                                <template x-if="selectedRecord()?.sticker">
+                                    <div class="border-2 border-dashed border-amber-300 bg-amber-50/40 p-4 rounded-3xl flex flex-col items-center justify-center text-center select-none">
+                                        <span class="text-4xl animate-bounceGentle" x-text="getStickerEmoji(selectedRecord()?.sticker)"></span>
+                                        <span class="text-[11px] font-black text-amber-850 mt-2 uppercase tracking-wider">Today's Badge</span>
+                                        <span class="text-[10px] text-amber-700 font-bold mt-0.5" 
+                                              x-text="getStickerInfo(selectedRecord()?.sticker)?.id === 'none' ? '表現待加油' : getStickerInfo(selectedRecord()?.sticker)?.label.split(' ')[1]"></span>
+                                    </div>
+                                </template>
+
+                                <!-- 複習影音教材連結 -->
+                                <div x-show="selectedRecord()?.links && selectedRecord()?.links.length > 0" class="space-y-2 print-hidden" style="display: none;">
+                                    <h4 class="text-xs font-bold text-stone-500 uppercase tracking-wider">🔗 影音複習教材網址</h4>
+                                    <div class="space-y-1.5">
+                                        <template x-for="lnk in selectedRecord()?.links" :key="lnk.id">
+                                            <a :href="lnk.url" target="_blank" rel="noreferrer" 
+                                               class="flex items-center gap-2 p-2.5 rounded-2xl border border-stone-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition text-xs text-stone-700 font-bold">
+                                                <span x-text="lnk.type === 'youtube' ? '📺' : lnk.type === 'doc' ? '📂' : '🌐'"></span>
+                                                <span class="line-clamp-1 hover:text-emerald-800 transition" x-text="lnk.title"></span>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 家長已簽聯留言顯示區 -->
+                        <div x-show="selectedRecord()?.parentSignature" class="mt-8 border-t-2 border-dashed border-stone-200 pt-6 grid grid-cols-1 md:grid-cols-12 gap-6 bg-[#FAF6F0]/40 p-4 rounded-3xl" style="display: none;">
+                            <div class="md:col-span-8">
+                                <p class="text-xs font-bold text-stone-400 uppercase tracking-wider">💬 家長聯絡留言意見</p>
+                                <p class="text-sm text-stone-750 font-bold mt-2 leading-relaxed italic bg-white p-3 rounded-2xl border border-stone-100" 
+                                   x-text="selectedRecord()?.parentFeedback || '（已確認今日英文內容，已線上簽名！）'"></p>
+                            </div>
+                            <div class="md:col-span-4 flex flex-col justify-between items-end text-right">
+                                <div>
+                                    <p class="text-xs font-bold text-stone-400 uppercase tracking-wider">✍️ 家長親筆聯名簽章</p>
+                                    <div class="bg-white border border-stone-150 rounded-2xl p-2 mt-2 h-20 w-44 flex items-center justify-center shadow-inner overflow-hidden">
+                                        <img :src="selectedRecord()?.parentSignature" alt="Parent Signature" class="max-h-full max-w-full object-contain" />
+                                    </div>
+                                </div>
+                                <p class="text-[10px] text-stone-450 mt-2 font-bold" x-text="'簽章時間：' + selectedRecord()?.signedAt"></p>
+                            </div>
+                        </div>
+
+                        <!-- 僅在列印時顯示的簽字欄位 (若家長尚未進行數位簽名) -->
+                        <div x-show="!selectedRecord()?.parentSignature" class="hidden print:flex justify-end items-end gap-4 mt-12 pt-8 border-t border-stone-200">
+                          <div class="text-right">
+                            <p class="text-xs text-stone-400 mb-1">爸媽給老師的話 / 叮嚀意見：</p>
+                            <div class="border border-stone-300 w-96 h-12 rounded-xl"></div>
+                          </div>
+                          <div class="text-right">
+                            <p class="text-xs text-stone-400 mb-1">家長簽名 (Signature)：</p>
+                            <div class="border border-stone-300 w-44 h-12 rounded-xl"></div>
+                          </div>
+                        </div>
+
+                    </div>
+
+                    <!-- 家長手寫電子簽聯填寫區 (若此筆尚未簽名，則開放) -->
+                    <div x-show="selectedRecord() && !selectedRecord()?.parentSignature" class="bg-white rounded-3xl shadow-sm border border-stone-100 p-8 space-y-6 print-hidden" style="display: none;">
+                        <div class="border-b border-stone-100 pb-4">
+                            <h3 class="text-lg font-black text-stone-800 flex items-center gap-2">
+                                <span>👪</span> 家長簽聯與意見回饋 (Parent Room)
+                            </h3>
+                            <p class="text-xs text-stone-400 mt-1">親愛的爸媽：過目完寶貝今天的學習後，可在下方手寫電子簽章並留下留言給老師喔！</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                            <!-- 留言意見 -->
+                            <div class="md:col-span-7 flex flex-col justify-between">
+                                <div>
+                                    <label class="block text-sm font-bold text-stone-700 mb-2">給家教老師的悄悄話與叮嚀</label>
+                                    <textarea rows="5"
+                                              placeholder="例如：孩子回家有主動放兒歌唱跳，單字學得很開心！謝謝老師耐心引導..."
+                                              x-model="feedbackText"
+                                              class="w-full border-stone-200 border rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 text-sm focus:border-emerald-500 text-stone-800"></textarea>
+                                </div>
+                                <p class="text-xs text-stone-400 mt-3 leading-relaxed">
+                                    💡 請先在右側進行電子手寫簽名，再點選下方送出，就會與留言一同上鎖、儲存囉！
+                                </p>
+                            </div>
+
+                            <!-- 手寫簽名畫布 -->
+                            <div class="md:col-span-5 flex flex-col items-center">
+                                <div class="w-full flex justify-between items-center mb-2">
+                                    <label class="text-sm font-bold text-stone-700">家長電子簽章板</label>
+                                    <button @click="clearSignatureCanvas()"
+                                            class="text-xs text-stone-500 hover:text-orange-600 font-bold hover:underline transition">
+                                        清除重寫
+                                    </button>
+                                </div>
+
+                                <div class="border-2 border-dashed border-stone-200 rounded-3xl bg-[#FAF6F0]/50 p-2 overflow-hidden flex items-center justify-center">
+                                    <canvas id="signatureCanvas"
+                                            width="250"
+                                            height="150"
+                                            class="bg-white rounded-2xl shadow-inner cursor-crosshair touch-none"
+                                            @mousedown="startDrawing($event)"
+                                            @mousemove="draw($event)"
+                                            @mouseup="stopDrawing()"
+                                            @mouseleave="stopDrawing()"
+                                            @touchstart="startDrawing($event)"
+                                            @touchmove="draw($event)"
+                                            @touchend="stopDrawing()">
+                                    </canvas>
+                                </div>
+                                
+                                <p class="text-[10px] text-stone-400 mt-2">請直接在框內寫字（支援手機/平板手指觸控手寫）</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-4 border-t border-stone-100">
+                            <button @click="handleParentSubmit(selectedRecordId)"
+                                    :disabled="!hasSigned"
+                                    class="font-bold px-8 py-3 rounded-2xl transition shadow-lg"
+                                    :class="hasSigned ? 'bg-emerald-700 hover:bg-emerald-600 text-white shadow-emerald-750/20' : 'bg-stone-100 text-stone-400 cursor-not-allowed shadow-none'">
+                                確認送出電子簽章與回覆
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- 頁尾說明 -->
+    <footer class="text-center text-stone-450 text-xs mt-12 py-6 border-t border-stone-200 max-w-6xl mx-auto px-4 print-hidden">
+        <p>© 2026 Luka’s 英文聯絡簿 - 森林大地系列 (特別適合國小1年級英文/幼英語)</p>
+        <p class="mt-1 text-[10px]">所有課堂紀錄資料採用瀏覽器本地儲存（Local Storage），安全有保障。</p>
+    </footer>
+
+    <!-- Alpine.js 應用程式邏輯與 Canvas 親筆簽章綁定 -->
+    <script>
+        function contactBook() {
+            // 模擬國小一年級精美英文初始資料
+            const INITIAL_RECORDS = [
+              {
+                id: 'rec-1',
+                date: '2026-05-18',
+                startTime: '14:00',
+                endTime: '15:30',
+                topic: 'Unit 1: Hello, Fruit World! 🍎',
+                vocabulary: 'apple (蘋果), banana (香蕉), cherry (櫻桃), dog (狗狗)',
+                grammar: 'Phonics 自然發音 /æ/, /b/, /k/ & 初階詢問與認字 "What is it? It is a..."',
+                speaking: '日常招呼語: "Hello, my name is..." & 兒童唱歌律動《Fruit Song》',
+                sticker: 'star',
+                focusScore: 5,
+                understandingScore: 4,
+                hwScore: 5,
+                hasExam: true,
+                examTopic: '字母 A-C 聽力與連連看小挑戰',
+                examScore: 100,
+                homework: '1. 字母 A-C 英文字帖寫法練習簿第 2、3 頁。\n2. 和爸媽練習說三次：「It is an apple!」',
+                links: [
+                  { id: 'lnk-1', title: 'Fruit Phonics Song (YouTube 唱跳兒歌)', url: 'https://www.youtube.com/watch?v=mock-fruit-abc', type: 'youtube' },
+                  { id: 'lnk-2', title: '水果塗鴉英文字母練習單 (PDF 電腦講義)', url: 'https://docs.google.com/mock-coloring-sheet-p1', type: 'doc' }
+                ],
+                parentFeedback: 'Luka 回家後一直開心地唱歌認水果，非常感謝老師的悉心教導！',
+                parentSignature: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="150" height="50"><text x="15" y="35" font-family="cursive" font-size="24" fill="%2315803d">Luka媽媽</text></svg>',
+                signedAt: '2026-05-18 17:30'
+              },
+              {
+                id: 'rec-2',
+                date: '2026-05-21',
+                startTime: '14:00',
+                endTime: '15:30',
+                topic: 'Unit 2: Magic Colors of Nature! 🌈',
+                vocabulary: 'red (紅色), yellow (黃色), blue (藍色), balloon (氣球)',
+                grammar: 'Phonics 自然發音 /d/, /e/, /f/ & 顏色問答 "What color is it? It is red."',
+                speaking: '英語繪本導讀《Brown Bear, Brown Bear, What Do You See?》與實物顏色尋寶遊戲',
+                sticker: 'none', // 空白徽章
+                focusScore: 4,
+                understandingScore: 5,
+                hwScore: 4,
+                hasExam: false,
+                examTopic: '',
+                examScore: null,
+                homework: '1. 完成顏色配對學習單 (請將氣球塗上正確的紅、黃、藍色)。\n2. 回家在家裡尋找 3 個藍色的玩具，用英文大聲唸出來。',
+                links: [
+                  { id: 'lnk-3', title: 'Brown Bear 英文繪本朗讀趣味影片', url: 'https://www.youtube.com/watch?v=mock-brown-bear-story', type: 'youtube' }
+                ],
+                parentFeedback: '',
+                parentSignature: '',
+                signedAt: ''
+              }
+            ];
+
+            return {
+                activeTab: 'dashboard',
+                records: [],
+                selectedRecordId: null,
+                toast: null,
+                showDeleteModalId: null,
+
+                // 20點兌換與扣點狀態
+                redeemModalOpen: false,
+                redeemForm: {
+                    item: '',
+                    photo: ''
+                },
+                redeemedList: [], // 兌換獎品歷史
+                deductionsList: [], // 手動扣點歷史
+                manualDeduct: {
+                    points: '',
+                    reason: ''
+                },
+
+                // 國小生最愛森林獎勵貼紙 (新增「none」空白徽章)
+                rewardStickers: [
+                  { id: 'star', emoji: '⭐', label: 'Super Star 超級巨星', bg: 'bg-amber-100', text: 'text-amber-805', border: 'border-amber-300' },
+                  { id: 'lion', emoji: '🦁', label: 'Brave Lion 勇敢小獅子', bg: 'bg-orange-100', text: 'text-orange-805', border: 'border-orange-300' },
+                  { id: 'bee', emoji: '🐝', label: 'Busy Bee 勤奮小蜜蜂', bg: 'bg-yellow-100', text: 'text-yellow-805', border: 'border-yellow-300' },
+                  { id: 'rocket', emoji: '🚀', label: 'Smart Rocket 聰明小火箭', bg: 'bg-cyan-100', text: 'text-cyan-805', border: 'border-cyan-300' },
+                  { id: 'rainbow', emoji: '🌈', label: 'Happy Rainbow 快樂彩虹', bg: 'bg-emerald-100', text: 'text-emerald-805', border: 'border-emerald-300' },
+                  { id: 'none', emoji: '⚪', label: '✕ 表現待改善 (當天無徽章不集點)', bg: 'bg-stone-100', text: 'text-stone-550', border: 'border-stone-300' },
+                ],
+
+                // 新增紀錄表單初始
+                formData: {
+                    date: '',
+                    startTime: '14:00',
+                    endTime: '15:30',
+                    topic: '',
+                    vocabulary: '',
+                    grammar: '',
+                    speaking: '',
+                    sticker: 'star',
+                    focusScore: 4,
+                    understandingScore: 4,
+                    hwScore: 4,
+                    hasExam: false,
+                    examTopic: '',
+                    examScore: '',
+                    homework: '',
+                    links: []
+                },
+
+                // 連結臨時表單
+                tempLinkLabel: 'youtube',
+                tempLinkTitle: '',
+                tempLinkUrl: '',
+
+                // 家長簽名 canvas 變數
+                feedbackText: '',
+                isDrawing: false,
+                hasSigned: false,
+                ctx: null,
+                canvasElement: null,
+
+                // 表現分析數據
+                stats: {
+                    avgFocus: 0,
+                    avgUnderstanding: 0,
+                    avgExamScore: 'N/A'
+                },
+
+                initApp() {
+                    // 自 Local Storage 載入
+                    const saved = localStorage.getItem('luka_tutor_records_v3');
+                    this.records = saved ? JSON.parse(saved) : INITIAL_RECORDS;
+
+                    const savedRedeemed = localStorage.getItem('luka_tutor_redeemed_v3');
+                    this.redeemedList = savedRedeemed ? JSON.parse(savedRedeemed) : [];
+
+                    const savedDeductions = localStorage.getItem('luka_tutor_deductions_v3');
+                    this.deductionsList = savedDeductions ? JSON.parse(savedDeductions) : [];
+
+                    this.resetFormData();
+                    this.calculateStats();
+                },
+
+                resetFormData() {
+                    this.formData = {
+                        date: new Date().toISOString().split('T')[0],
+                        startTime: '14:00',
+                        endTime: '15:30',
+                        topic: '',
+                        vocabulary: '',
+                        grammar: '',
+                        speaking: '',
+                        sticker: 'star',
+                        focusScore: 4,
+                        understandingScore: 4,
+                        hwScore: 4,
+                        hasExam: false,
+                        examTopic: '',
+                        examScore: '',
+                        homework: '',
+                        links: []
+                    };
+                    this.tempLinkLabel = 'youtube';
+                    this.tempLinkTitle = '';
+                    this.tempLinkUrl = '';
+                },
+
+                calculateStats() {
+                    const total = this.records.length;
+                    if (total === 0) {
+                        this.stats = { avgFocus: 0, avgUnderstanding: 0, avgExamScore: 'N/A' };
+                        return;
+                    }
+                    const sumFocus = this.records.reduce((acc, r) => acc + Number(r.focusScore), 0);
+                    const sumUnderstanding = this.records.reduce((acc, r) => acc + Number(r.understandingScore), 0);
+                    
+                    const exams = this.records.filter(r => r.hasExam && r.examScore !== null && r.examScore !== '');
+                    const avgExam = exams.length ? (exams.reduce((acc, r) => acc + Number(r.examScore), 0) / exams.length).toFixed(1) : 'N/A';
+
+                    this.stats = {
+                        avgFocus: (sumFocus / total).toFixed(1),
+                        avgUnderstanding: (sumUnderstanding / total).toFixed(1),
+                        avgExamScore: avgExam
+                    };
+                },
+
+                // 智慧點數樂園計算 (貼紙 = 10 點，星星 = 1 點。扣除已兌換、手動扣點)
+                getPointsData() {
+                    let totalEarned = 0;
+                    this.records.forEach(r => {
+                        // 貼紙：每個非 none 貼紙 10 分，none 空白徽章為 0 分
+                        if (r.sticker && r.sticker !== 'none') totalEarned += 10;
+                        // 評分星星：每顆星星 1 分
+                        totalEarned += (Number(r.focusScore) || 0) + (Number(r.understandingScore) || 0) + (Number(r.hwScore) || 0);
+                    });
+
+                    // 扣除已兌換的點數 (每次兌換花費 20 點)
+                    let totalRedeemedPoints = this.redeemedList.length * 20;
+
+                    // 扣除手動扣點點數
+                    let totalDeductions = this.deductionsList.reduce((acc, d) => acc + Number(deductPoints = d.points || 0), 0);
+
+                    // 可用點數
+                    let availablePoints = Math.max(0, totalEarned - totalRedeemedPoints - totalDeductions);
+
+                    let levelName = '萌芽小幼苗 🌱';
+                    let nextMilestone = 50;
+                    let prevMilestone = 0;
+                    let badge = '🌱';
+
+                    if (totalEarned >= 300) {
+                        levelName = '森林守護王者 👑';
+                        nextMilestone = 500;
+                        prevMilestone = 300;
+                        badge = '👑';
+                    } else if (totalEarned >= 150) {
+                        levelName = '聰明森林狐狸 🦊';
+                        nextMilestone = 300;
+                        prevMilestone = 150;
+                        badge = '🦊';
+                    } else if (totalEarned >= 50) {
+                        levelName = '勤勞活力小熊 🐻';
+                        nextMilestone = 150;
+                        prevMilestone = 50;
+                        badge = '🐻';
+                    }
+
+                    const range = nextMilestone - prevMilestone;
+                    const earnedInRange = totalEarned - prevMilestone;
+                    const percent = Math.min(Math.max((earnedInRange / range) * 100, 0), 100);
+
+                    return {
+                        totalEarned,
+                        availablePoints,
+                        levelName,
+                        nextMilestone,
+                        percent,
+                        badge
+                    };
+                },
+
+                // 統計貼紙收集牆數量 (不含空白徽章)
+                getStickerCounts() {
+                    const counts = { star: 0, lion: 0, bee: 0, rocket: 0, rainbow: 0 };
+                    this.records.forEach(r => {
+                        if (r.sticker && counts[r.sticker] !== undefined) {
+                            counts[r.sticker]++;
+                        }
+                    });
+                    return counts;
+                },
+
+                saveToLocalStorage() {
+                    localStorage.setItem('luka_tutor_records_v3', JSON.stringify(this.records));
+                    localStorage.setItem('luka_tutor_redeemed_v3', JSON.stringify(this.redeemedList));
+                    localStorage.setItem('luka_tutor_deductions_v3', JSON.stringify(this.deductionsList));
+                    this.calculateStats();
+                },
+
+                showToastMessage(message, type = 'success') {
+                    this.toast = { message, type };
+                    setTimeout(() => {
+                        this.toast = null;
+                    }, 3000);
+                },
+
+                changeTab(tab) {
+                    this.activeTab = tab;
+                    if (tab !== 'history') {
+                        this.selectedRecordId = null;
+                    }
+                },
+
+                getStickerInfo(stickerId) {
+                    return this.rewardStickers.find(s => s.id === stickerId);
+                },
+
+                getStickerEmoji(stickerId) {
+                    const found = this.getStickerInfo(stickerId);
+                    return found ? found.emoji : '';
+                },
+
+                // 選定歷史紀錄詳情
+                selectRecord(id) {
+                    this.selectedRecordId = id;
+                    this.feedbackText = '';
+                    this.hasSigned = false;
+                    
+                    this.$nextTick(() => {
+                        const rec = this.records.find(r => r.id === id);
+                        if (rec && !rec.parentSignature) {
+                            this.initSignatureCanvas();
+                        }
+                    });
+                },
+
+                selectedRecord() {
+                    return this.records.find(r => r.id === this.selectedRecordId) || null;
+                },
+
+                viewDetailInHistory(id) {
+                    this.activeTab = 'history';
+                    this.selectRecord(id);
+                },
+
+                // 新增複習連結
+                addTempLink() {
+                    if (!this.tempLinkTitle || !this.tempLinkUrl) {
+                        this.showToastMessage('請填寫教材連結名稱與網址！', 'error');
+                        return;
+                    }
+                    if (!this.tempLinkUrl.startsWith('http://') && !this.tempLinkUrl.startsWith('https://')) {
+                        this.showToastMessage('網址請以 http:// 或 https:// 開頭！', 'error');
+                        return;
+                    }
+
+                    this.formData.links.push({
+                        id: `lnk-${Date.now()}`,
+                        title: this.tempLinkTitle,
+                        url: this.tempLinkUrl,
+                        type: this.tempLinkLabel
+                    });
+
+                    this.tempLinkTitle = '';
+                    this.tempLinkUrl = '';
+                    this.showToastMessage('課堂教材連結新增成功！');
+                },
+
+                removeTempLink(linkId) {
+                    this.formData.links = this.formData.links.filter(l => l.id !== linkId);
+                },
+
+                // 發佈新進度聯絡簿
+                handleAddRecord() {
+                    if (!this.formData.topic) {
+                        this.showToastMessage('請填寫今日英文上課主題喔！', 'error');
+                        return;
+                    }
+
+                    const newRecordObj = {
+                        id: `rec-${Date.now()}`,
+                        date: this.formData.date,
+                        startTime: this.formData.startTime,
+                        endTime: this.formData.endTime,
+                        topic: this.formData.topic,
+                        vocabulary: this.formData.vocabulary,
+                        grammar: this.formData.grammar,
+                        speaking: this.formData.speaking,
+                        sticker: this.formData.sticker,
+                        focusScore: Number(this.formData.focusScore),
+                        understandingScore: Number(this.formData.understandingScore),
+                        hwScore: Number(this.formData.hwScore),
+                        hasExam: this.formData.hasExam,
+                        examTopic: this.formData.hasExam ? this.formData.examTopic : '',
+                        examScore: this.formData.hasExam ? Number(this.formData.examScore) : null,
+                        homework: this.formData.homework,
+                        links: [...this.formData.links],
+                        parentFeedback: '',
+                        parentSignature: '',
+                        signedAt: ''
+                    };
+
+                    this.records.unshift(newRecordObj);
+                    this.saveToLocalStorage();
+                    this.resetFormData();
+                    
+                    if (newRecordObj.sticker === 'none') {
+                        this.showToastMessage('今日課堂已發佈 (選擇空白徽章不增加徽章點數)');
+                    } else {
+                        this.showToastMessage('今日上課成果發佈成功！森林點數已累計！');
+                    }
+                    this.changeTab('dashboard');
+                },
+
+                triggerDeleteRecord(id) {
+                    this.showDeleteModalId = id;
+                },
+
+                confirmDeleteRecord() {
+                    const id = this.showDeleteModalId;
+                    this.records = this.records.filter(r => r.id !== id);
+                    this.saveToLocalStorage();
+                    if (this.selectedRecordId === id) {
+                        this.selectedRecordId = null;
+                    }
+                    this.showDeleteModalId = null;
+                    this.showToastMessage('紀錄已成功刪除！');
+                },
+
+                // --- 20 點獎勵核銷控制區 ---
+                openRedeemModal() {
+                    this.redeemForm.item = '';
+                    this.redeemForm.photo = '';
+                    this.redeemModalOpen = true;
+                },
+
+                closeRedeemModal() {
+                    this.redeemModalOpen = false;
+                },
+
+                handlePhotoUpload(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        this.redeemForm.photo = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                submitRedemption() {
+                    if (!this.redeemForm.item) {
+                        this.showToastMessage('請輸入兌換獎品備註唷！', 'error');
+                        return;
+                    }
+                    if (this.getPointsData().availablePoints < 20) {
+                        this.showToastMessage('可用點數不足，無法兌換！', 'error');
+                        return;
+                    }
+
+                    const newRedeemObj = {
+                        id: `red-${Date.now()}`,
+                        date: new Date().toLocaleDateString(),
+                        item: this.redeemForm.item,
+                        photo: this.redeemForm.photo
+                    };
+
+                    this.redeemedList.unshift(newRedeemObj);
+                    this.saveToLocalStorage();
+                    this.closeRedeemModal();
+                    this.showToastMessage(`恭喜核銷 20 點！成功兌換: ${this.redeemForm.item} 🏆`);
+                },
+
+                deleteRedemption(id) {
+                    if (confirm('確定要刪除此筆兌換紀錄嗎？點數將會退回！')) {
+                        this.redeemedList = this.redeemedList.filter(item => item.id !== id);
+                        this.saveToLocalStorage();
+                        this.showToastMessage('兌換紀錄已刪除，點數已成功退回！');
+                    }
+                },
+
+                // --- 手動扣除點數控制區 (集點也可以刪除/手動微調) ---
+                submitManualDeduction() {
+                    const pts = Number(this.manualDeduct.points);
+                    if (!pts || pts <= 0) {
+                        this.showToastMessage('請輸入正確的扣除點數！', 'error');
+                        return;
+                    }
+                    if (!this.manualDeduct.reason) {
+                        this.showToastMessage('請填寫扣除備註原因！', 'error');
+                        return;
+                    }
+
+                    const newDeductObj = {
+                        id: `ded-${Date.now()}`,
+                        date: new Date().toLocaleDateString(),
+                        points: pts,
+                        reason: this.manualDeduct.reason
+                    };
+
+                    this.deductionsList.unshift(newDeductObj);
+                    this.saveToLocalStorage();
+                    
+                    this.manualDeduct.points = '';
+                    this.manualDeduct.reason = '';
+                    this.showToastMessage(`成功手動扣除 ${pts} 點點數！`);
+                },
+
+                deleteDeduction(id) {
+                    if (confirm('確定要刪除這筆扣點紀錄嗎？被扣除的點數將會退回可用點數。')) {
+                        this.deductionsList = this.deductionsList.filter(item => item.id !== id);
+                        this.saveToLocalStorage();
+                        this.showToastMessage('扣點紀錄已刪除，點數已成功還原！');
+                    }
+                },
+
+                // 繪圖板：初始化手寫簽章畫布
+                initSignatureCanvas() {
+                    const canvas = document.getElementById('signatureCanvas');
+                    if (!canvas) return;
+                    this.canvasElement = canvas;
+                    this.ctx = canvas.getContext('2d');
+                    this.ctx.strokeStyle = '#15803D'; // 翠綠色筆跡
+                    this.ctx.lineWidth = 3;
+                    this.ctx.lineCap = 'round';
+                    this.ctx.lineJoin = 'round';
+                    this.clearSignatureCanvas();
+                },
+
+                // 清除簽名畫布
+                clearSignatureCanvas() {
+                    if (!this.ctx || !this.canvasElement) return;
+                    this.ctx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+                    
+                    // 繪製溫和土黃指引線
+                    this.ctx.strokeStyle = '#E7E5E4';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(10, this.canvasElement.height - 15);
+                    this.ctx.lineTo(this.canvasElement.width - 10, this.canvasElement.height - 15);
+                    this.ctx.stroke();
+
+                    // 恢復手寫設定
+                    this.ctx.strokeStyle = '#15803D';
+                    this.ctx.lineWidth = 3;
+                    this.hasSigned = false;
+                },
+
+                getEventCoords(e) {
+                    if (!this.canvasElement) return { x: 0, y: 0 };
+                    const rect = this.canvasElement.getBoundingClientRect();
+                    
+                    if (e.touches && e.touches.length > 0) {
+                        return {
+                            x: e.touches[0].clientX - rect.left,
+                            y: e.touches[0].clientY - rect.top
+                        };
+                    }
+                    return {
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                    };
+                },
+
+                startDrawing(e) {
+                    e.preventDefault();
+                    if (!this.ctx) return;
+                    const coords = this.getEventCoords(e);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(coords.x, coords.y);
+                    this.isDrawing = true;
+                    this.hasSigned = true;
+                },
+
+                draw(e) {
+                    if (!this.isDrawing || !this.ctx) return;
+                    e.preventDefault();
+                    const coords = this.getEventCoords(e);
+                    this.ctx.lineTo(coords.x, coords.y);
+                    this.ctx.stroke();
+                },
+
+                stopDrawing() {
+                    this.isDrawing = false;
+                },
+
+                // 家長送出簽章與回饋
+                handleParentSubmit(recordId) {
+                    if (!this.hasSigned || !this.canvasElement) {
+                        this.showToastMessage('請先在畫布板中手寫親筆簽名喔！', 'error');
+                        return;
+                    }
+
+                    const dataUrl = this.canvasElement.toDataURL();
+                    
+                    this.records = this.records.map(r => {
+                        if (r.id === recordId) {
+                            return {
+                                ...r,
+                                parentFeedback: this.feedbackText || r.parentFeedback,
+                                parentSignature: dataUrl,
+                                signedAt: new Date().toLocaleString()
+                            };
+                        }
+                        return r;
+                    });
+
+                    this.saveToLocalStorage();
+                    this.feedbackText = '';
+                    this.hasSigned = false;
+                    this.showToastMessage('親愛的家長：您的線上簽章與留言已成功提交囉！');
+                },
+
+                triggerPrint() {
+                    setTimeout(() => {
+                        window.print();
+                    }, 300);
+                }
+            };
+        }
+    </script>
+</body>
+</html>
